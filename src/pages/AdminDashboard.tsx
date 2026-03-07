@@ -7,7 +7,9 @@ import StatusOverview from "@/components/admin/StatusOverview";
 import CsvUpload from "@/components/admin/CsvUpload";
 import OrdersTable from "@/components/admin/OrdersTable";
 import DispatchPanel from "@/components/admin/DispatchPanel";
-import { LogOut, Package, Send } from "lucide-react";
+import DriverManagement from "@/components/admin/DriverManagement";
+import VehicleManagement from "@/components/admin/VehicleManagement";
+import { LogOut, Package, Send, Users, Car } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 export default function AdminDashboard() {
@@ -27,7 +29,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-card/80 backdrop-blur-sm">
         <div className="container flex h-14 items-center justify-between">
           <div className="flex items-center gap-3">
@@ -48,12 +49,10 @@ export default function AdminDashboard() {
 
         <Tabs defaultValue="orders" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="orders" className="gap-2">
-              <Package className="h-4 w-4" /> Orders
-            </TabsTrigger>
-            <TabsTrigger value="dispatch" className="gap-2">
-              <Send className="h-4 w-4" /> Dispatch
-            </TabsTrigger>
+            <TabsTrigger value="orders" className="gap-2"><Package className="h-4 w-4" /> Orders</TabsTrigger>
+            <TabsTrigger value="dispatch" className="gap-2"><Send className="h-4 w-4" /> Dispatch</TabsTrigger>
+            <TabsTrigger value="drivers" className="gap-2"><Users className="h-4 w-4" /> Drivers</TabsTrigger>
+            <TabsTrigger value="vehicles" className="gap-2"><Car className="h-4 w-4" /> Vehicles</TabsTrigger>
           </TabsList>
 
           <TabsContent value="orders" className="space-y-4">
@@ -65,6 +64,9 @@ export default function AdminDashboard() {
             <OrdersTable orders={orders} selectedIds={selectedIds} onSelectionChange={setSelectedIds} />
             <DispatchPanel selectedOrderIds={selectedIds} onDispatched={() => { setSelectedIds([]); fetchOrders(); }} />
           </TabsContent>
+
+          <TabsContent value="drivers"><DriverManagement /></TabsContent>
+          <TabsContent value="vehicles"><VehicleManagement /></TabsContent>
         </Tabs>
       </main>
     </div>
