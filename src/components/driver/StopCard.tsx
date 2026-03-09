@@ -11,8 +11,19 @@ export interface StopData {
   stopOrder: number;
 }
 
+/** Grouped pickup data */
+export interface PickupGroup {
+  auctionHouse: string;
+  address: string;
+  count: number;
+  orderIds: string[];
+  stops: StopData[];
+}
+
 interface Props {
   stop: StopData;
+  pickupGroup?: PickupGroup;
+  relatedOrderIds?: string[];
   onNavigate: (address: string) => void;
   onMarkPickedUp: (orderId: string) => void;
   onTakePhoto: (orderId: string) => void;
@@ -20,7 +31,7 @@ interface Props {
   onSkip: (orderId: string) => void;
 }
 
-export default function StopCard({ stop, onNavigate, onMarkPickedUp, onTakePhoto, onMarkDelivered, onSkip }: Props) {
+export default function StopCard({ stop, pickupGroup, relatedOrderIds, onNavigate, onMarkPickedUp, onTakePhoto, onMarkDelivered, onSkip }: Props) {
   const { order, stopType } = stop;
   const isPickup = stopType === "pickup";
   const isUnpaid = order.payment_status === "unpaid";
@@ -46,12 +57,28 @@ export default function StopCard({ stop, onNavigate, onMarkPickedUp, onTakePhoto
               {isPickup ? <Package className="h-5 w-5" /> : <Home className="h-5 w-5" />}
             </div>
             <div className="space-y-1">
-              <p className="font-semibold text-sm">{isPickup ? order.auction_house : order.customer_name}</p>
+              {isPickup && pickupGroup ? (
+                <>
+                  <p className="font-semibold text-sm">{pickupGroup.auctionHouse}</p>
+                  <p className="text-xs font-medium text-pickup">{pickupGroup.count} Items to Pick Up</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-sm">{order.customer_name}</p>
+                  {relatedOrderIds && relatedOrderIds.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Orders: {relatedOrderIds.join(", ")}
+                    </p>
+                  )}
+                </>
+              )}
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <MapPin className="h-3 w-3" />
                 {address || "No address"}
               </p>
-              <p className="font-mono text-xs text-muted-foreground">ID: {order.pkgplace_id}</p>
+              {!isPickup && (
+                <p className="text-xs text-muted-foreground">ID: {order.pkgplace_id}</p>
+              )}
               {order.delivery_instructions && !isPickup && (
                 <p className="text-xs italic text-muted-foreground">"{order.delivery_instructions}"</p>
               )}
@@ -68,8 +95,14 @@ export default function StopCard({ stop, onNavigate, onMarkPickedUp, onTakePhoto
             <Navigation className="mr-1.5 h-3.5 w-3.5" /> Navigate
           </Button>
           {isPickup ? (
-            <Button size="sm" className="bg-pickup hover:bg-pickup/90 text-pickup-foreground" onClick={() => onMarkPickedUp(order.pkgplace_id)}>
-              <Package className="mr-1.5 h-3.5 w-3.5" /> Mark Picked Up
+            <Button size="sm" className="bg-pickup hover:bg-pickup/90 text-pickup-foreground" onClick={() => {
+              if (pickupGroup) {
+                pickupGroup.orderIds.forEach((id) => onMarkPickedUp(id));
+              } else {
+                onMarkPickedUp(order.pkgplace_id);
+              }
+            }}>
+              <Package className="mr-1.5 h-3.5 w-3.5" /> Mark All Picked Up
             </Button>
           ) : (
             <>

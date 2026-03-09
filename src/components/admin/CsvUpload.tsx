@@ -1,7 +1,8 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Upload, FileText, X } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Upload, FileText, X, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -16,23 +17,13 @@ function parseCsvLine(line: string): string[] {
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        current += ch;
-      }
+      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { current += ch; }
     } else {
-      if (ch === '"') {
-        inQuotes = true;
-      } else if (ch === ",") {
-        result.push(current.trim());
-        current = "";
-      } else {
-        current += ch;
-      }
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === ",") { result.push(current.trim()); current = ""; }
+      else { current += ch; }
     }
   }
   result.push(current.trim());
@@ -43,14 +34,19 @@ function parsePaymentStatus(val: string): "paid" | "unpaid" {
   return val.toLowerCase() === "paid" ? "paid" : "unpaid";
 }
 
-function parseDeliveryStatus(val: string): "requested" | "ready" | "in_warehouse" | "out_for_delivery" | "delivered" {
+function parseDeliveryStatus(val: string): "requested" | "ready" | "picked_up" | "warehouse" | "in_transit" | "delivered" {
   const map: Record<string, any> = {
     requested: "requested",
     ready: "ready",
-    "in warehouse": "in_warehouse",
-    in_warehouse: "in_warehouse",
-    "out for delivery": "out_for_delivery",
-    out_for_delivery: "out_for_delivery",
+    "picked up": "picked_up",
+    picked_up: "picked_up",
+    warehouse: "warehouse",
+    "in warehouse": "warehouse",
+    in_warehouse: "warehouse",
+    "in transit": "in_transit",
+    in_transit: "in_transit",
+    "out for delivery": "in_transit",
+    out_for_delivery: "in_transit",
     delivered: "delivered",
   };
   return map[val.toLowerCase()] ?? "requested";
@@ -60,6 +56,8 @@ export default function CsvUpload({ onImported }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeProgress, setGeocodeProgress] = useState(0);
   const { toast } = useToast();
 
   const handleFile = (f: File) => {
@@ -76,6 +74,28 @@ export default function CsvUpload({ onImported }: Props) {
     if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
   }, []);
 
+  const geocodeOrders = async (orderIds: string[]) => {
+    if (orderIds.length === 0) return;
+    setGeocoding(true);
+    setGeocodeProgress(0);
+    try {
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const batchSize = 10;
+      for (let i = 0; i < orderIds.length; i += batchSize) {
+        const batch = orderIds.slice(i, i + batchSize);
+        await supabase.functions.invoke("geocode-addresses", {
+          body: { order_ids: batch },
+        });
+        setGeocodeProgress(Math.round(((i + batch.length) / orderIds.length) * 100));
+      }
+    } catch (err: any) {
+      console.error("Geocoding error:", err);
+    } finally {
+      setGeocoding(false);
+      setGeocodeProgress(100);
+    }
+  };
+
   const handleImport = async () => {
     if (!file) return;
     setUploading(true);
@@ -85,8 +105,6 @@ export default function CsvUpload({ onImported }: Props) {
       if (lines.length < 2) throw new Error("CSV must have a header row and at least one data row");
 
       const headers = parseCsvLine(lines[0]).map((h) => h.toLowerCase().trim());
-
-      // Column index mapping
       const col = (name: string) => headers.indexOf(name);
       const pkgIdx = col("pkgplace id");
       const statusIdx = col("delivery status");
@@ -130,6 +148,13 @@ export default function CsvUpload({ onImported }: Props) {
       }
 
       toast({ title: "Import complete", description: `${orders.length} orders imported.` });
+
+      // Geocode orders that have addresses but no lat/lng
+      const idsToGeocode = orders.filter((o) => o.address).map((o) => o.pkgplace_id);
+      if (idsToGeocode.length > 0) {
+        await geocodeOrders(idsToGeocode);
+      }
+
       setFile(null);
       onImported();
     } catch (err: any) {
@@ -142,6 +167,15 @@ export default function CsvUpload({ onImported }: Props) {
   return (
     <Card className="border-dashed border-2">
       <CardContent className="p-6">
+        {geocoding && (
+          <div className="mb-4 space-y-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <MapPin className="h-4 w-4 animate-pulse text-primary" />
+              Converting addresses to map points...
+            </div>
+            <Progress value={geocodeProgress} className="h-2" />
+          </div>
+        )}
         {!file ? (
           <div
             className={`flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-8 transition-colors ${
