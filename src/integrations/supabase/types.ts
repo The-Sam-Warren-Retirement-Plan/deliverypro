@@ -153,10 +153,14 @@ export type Database = {
           delivery_instructions: string | null
           delivery_status: Database["public"]["Enums"]["delivery_status"]
           email: string | null
+          formatted_address: string | null
+          latitude: number | null
+          longitude: number | null
           payment_status: Database["public"]["Enums"]["payment_status"]
           phone: string | null
           photo_url: string | null
           pkgplace_id: string
+          record_id: string | null
           zip_code: string | null
           zone: string | null
         }
@@ -169,10 +173,14 @@ export type Database = {
           delivery_instructions?: string | null
           delivery_status?: Database["public"]["Enums"]["delivery_status"]
           email?: string | null
+          formatted_address?: string | null
+          latitude?: number | null
+          longitude?: number | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
           phone?: string | null
           photo_url?: string | null
           pkgplace_id: string
+          record_id?: string | null
           zip_code?: string | null
           zone?: string | null
         }
@@ -185,10 +193,14 @@ export type Database = {
           delivery_instructions?: string | null
           delivery_status?: Database["public"]["Enums"]["delivery_status"]
           email?: string | null
+          formatted_address?: string | null
+          latitude?: number | null
+          longitude?: number | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
           phone?: string | null
           photo_url?: string | null
           pkgplace_id?: string
+          record_id?: string | null
           zip_code?: string | null
           zone?: string | null
         }
@@ -382,6 +394,9 @@ export type Database = {
         | "in_warehouse"
         | "out_for_delivery"
         | "delivered"
+        | "picked_up"
+        | "warehouse"
+        | "in_transit"
       payment_status: "paid" | "unpaid"
       stop_type: "pickup" | "delivery"
     }
@@ -525,6 +540,9 @@ export const Constants = {
         "in_warehouse",
         "out_for_delivery",
         "delivered",
+        "picked_up",
+        "warehouse",
+        "in_transit",
       ],
       payment_status: ["paid", "unpaid"],
       stop_type: ["pickup", "delivery"],
