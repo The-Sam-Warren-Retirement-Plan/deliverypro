@@ -42,15 +42,27 @@ export default function DriverView() {
     const { data: archived } = await supabase.from("archived_stops").select("order_id").in("order_id", orderIds);
     const archivedSet = new Set((archived || []).map((a) => a.order_id));
 
+    // Determine stop type from order status:
+    // Pickups = requested, ready
+    // Deliveries = picked_up, warehouse, in_transit
+    const pickupStatuses = ["requested", "ready"];
+    const deliveryStatuses = ["picked_up", "warehouse", "in_transit"];
+    const activeStatuses = [...pickupStatuses, ...deliveryStatuses];
+
     const stopData: StopData[] = routeOrders
       .filter((ro) => !archivedSet.has(ro.order_id) && orderMap.has(ro.order_id))
-      .filter((ro) => orderMap.get(ro.order_id)!.delivery_status !== "delivered")
-      .map((ro) => ({
-        routeOrderId: ro.id,
-        order: orderMap.get(ro.order_id)!,
-        stopType: ro.stop_type,
-        stopOrder: ro.stop_order,
-      }));
+      .filter((ro) => activeStatuses.includes(orderMap.get(ro.order_id)!.delivery_status))
+      .map((ro) => {
+        const order = orderMap.get(ro.order_id)!;
+        // Override stop_type based on actual order status
+        const computedStopType = pickupStatuses.includes(order.delivery_status) ? "pickup" : "delivery";
+        return {
+          routeOrderId: ro.id,
+          order,
+          stopType: computedStopType,
+          stopOrder: ro.stop_order,
+        };
+      });
 
     setStops(stopData);
     setLoading(false);
