@@ -53,7 +53,7 @@ const Login = () => {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary">
             <Truck className="h-7 w-7 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl font-bold">Overnight Delivery</CardTitle>
+          <CardTitle className="text-2xl font-bold">DeliveryPro</CardTitle>
           <CardDescription>Logistics management platform</CardDescription>
         </CardHeader>
         <CardContent>
