@@ -10,7 +10,7 @@ import DriverHistory from "@/components/driver/DriverHistory";
 import GeofencePrompt from "@/components/driver/GeofencePrompt";
 import DriverMapView from "@/components/driver/DriverMapView";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Package, Truck, History, Map } from "lucide-react";
+import { LogOut, Package, Truck, History, Map as MapIcon } from "lucide-react";
 
 export default function DriverView() {
   const { signOut, user } = useAuth();
