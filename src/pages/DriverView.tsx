@@ -145,7 +145,7 @@ export default function DriverView() {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full grid grid-cols-3">
             <TabsTrigger value="route" className="gap-1"><Truck className="h-3.5 w-3.5" /> Today</TabsTrigger>
-            <TabsTrigger value="map" className="gap-1"><Map className="h-3.5 w-3.5" /> Map</TabsTrigger>
+            <TabsTrigger value="map" className="gap-1"><MapIcon className="h-3.5 w-3.5" /> Map</TabsTrigger>
             <TabsTrigger value="history" className="gap-1"><History className="h-3.5 w-3.5" /> History</TabsTrigger>
           </TabsList>
         </Tabs>
