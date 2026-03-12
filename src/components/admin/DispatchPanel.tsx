@@ -5,21 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Zap } from "lucide-react";
+import { Send, Zap, Building2, Plus } from "lucide-react";
 import { format } from "date-fns";
 import type { Tables } from "@/integrations/supabase/types";
 
-interface Driver {
-  id: string;
-  display_name: string | null;
-}
-
-interface Vehicle {
-  id: string;
-  year: number | null;
-  make: string;
-  model: string;
-}
+interface Driver { id: string; display_name: string | null; }
+interface Vehicle { id: string; year: number | null; make: string; model: string; }
+type AuctionHouse = Tables<"auction_houses">;
 
 interface Props {
   selectedOrderIds: string[];
@@ -30,10 +22,14 @@ interface Props {
 export default function DispatchPanel({ selectedOrderIds, orders, onDispatched }: Props) {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [auctionHouses, setAuctionHouses] = useState<AuctionHouse[]>([]);
   const [selectedDriver, setSelectedDriver] = useState("");
   const [selectedVehicle, setSelectedVehicle] = useState("");
   const [routeDate, setRouteDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [routeNote, setRouteNote] = useState("");
+  const [selectedAH, setSelectedAH] = useState("");
   const [dispatching, setDispatching] = useState(false);
+  const [addingAH, setAddingAH] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const { toast } = useToast();
 
@@ -46,55 +42,56 @@ export default function DispatchPanel({ selectedOrderIds, orders, onDispatched }
       }
       const { data: v } = await supabase.from("vehicles").select("id, year, make, model");
       setVehicles(v || []);
+      const { data: ah } = await supabase.from("auction_houses").select("*").order("name");
+      setAuctionHouses(ah || []);
     };
     fetchData();
   }, []);
+
+  const getOrCreateRoute = async () => {
+    let { data: existingRoute } = await supabase
+      .from("routes").select("id").eq("driver_id", selectedDriver).eq("route_date", routeDate).maybeSingle();
+
+    let routeId: string;
+    if (existingRoute) {
+      routeId = existingRoute.id;
+      await supabase.from("routes").update({
+        ...(selectedVehicle ? { vehicle_id: selectedVehicle } : {}),
+        note: routeNote.trim() || null,
+      }).eq("id", routeId);
+    } else {
+      const { data: newRoute, error } = await supabase.from("routes").insert({
+        driver_id: selectedDriver,
+        route_date: routeDate,
+        vehicle_id: selectedVehicle || null,
+        note: routeNote.trim() || null,
+      }).select("id").single();
+      if (error) throw error;
+      routeId = newRoute.id;
+    }
+    return routeId;
+  };
 
   const handleDispatch = async () => {
     if (!selectedDriver || selectedOrderIds.length === 0) return;
     setDispatching(true);
     try {
-      let { data: existingRoute } = await supabase
-        .from("routes").select("id").eq("driver_id", selectedDriver).eq("route_date", routeDate).maybeSingle();
-
-      let routeId: string;
-      if (existingRoute) {
-        routeId = existingRoute.id;
-        if (selectedVehicle) {
-          await supabase.from("routes").update({ vehicle_id: selectedVehicle }).eq("id", routeId);
-        }
-      } else {
-        const { data: newRoute, error } = await supabase.from("routes")
-          .insert({ driver_id: selectedDriver, route_date: routeDate, vehicle_id: selectedVehicle || null })
-          .select("id").single();
-        if (error) throw error;
-        routeId = newRoute.id;
-      }
-
+      const routeId = await getOrCreateRoute();
       const { data: existingStops } = await supabase
         .from("route_orders").select("stop_order").eq("route_id", routeId)
         .order("stop_order", { ascending: false }).limit(1);
-
       let nextOrder = (existingStops?.[0]?.stop_order ?? -1) + 1;
 
-      // Determine stop_type based on order status
       const orderMap = new Map(orders.map((o) => [o.pkgplace_id, o]));
       const routeOrders = selectedOrderIds.map((orderId, i) => {
         const order = orderMap.get(orderId);
         const isPickup = order && (order.delivery_status === "requested" || order.delivery_status === "ready");
-        return {
-          route_id: routeId,
-          order_id: orderId,
-          stop_order: nextOrder + i,
-          stop_type: isPickup ? "pickup" as const : "delivery" as const,
-        };
+        return { route_id: routeId, order_id: orderId, stop_order: nextOrder + i, stop_type: isPickup ? "pickup" as const : "delivery" as const };
       });
 
       const { error } = await supabase.from("route_orders").upsert(routeOrders, { onConflict: "route_id,order_id" });
       if (error) throw error;
 
-      // Update order statuses
-      const pickupIds = routeOrders.filter((ro) => ro.stop_type === "pickup").map((ro) => ro.order_id);
       const deliveryIds = routeOrders.filter((ro) => ro.stop_type === "delivery").map((ro) => ro.order_id);
       if (deliveryIds.length) await supabase.from("orders").update({ delivery_status: "in_transit" }).in("pkgplace_id", deliveryIds);
 
@@ -107,6 +104,38 @@ export default function DispatchPanel({ selectedOrderIds, orders, onDispatched }
     }
   };
 
+  const handleAddAHPickup = async () => {
+    if (!selectedDriver || !selectedAH) return;
+    setAddingAH(true);
+    try {
+      const routeId = await getOrCreateRoute();
+      const pendingOrders = orders.filter(
+        (o) => (o.auction_house || "").toLowerCase() === selectedAH.toLowerCase() &&
+          (o.delivery_status === "requested" || o.delivery_status === "ready")
+      );
+      if (pendingOrders.length === 0) {
+        toast({ title: "No pending orders", description: "No requested/ready orders found for this auction house.", variant: "destructive" });
+        return;
+      }
+      const { data: existingStops } = await supabase
+        .from("route_orders").select("stop_order").eq("route_id", routeId)
+        .order("stop_order", { ascending: false }).limit(1);
+      let nextOrder = (existingStops?.[0]?.stop_order ?? -1) + 1;
+      const routeOrders = pendingOrders.map((order, i) => ({
+        route_id: routeId, order_id: order.pkgplace_id, stop_order: nextOrder + i, stop_type: "pickup" as const,
+      }));
+      const { error } = await supabase.from("route_orders").upsert(routeOrders, { onConflict: "route_id,order_id" });
+      if (error) throw error;
+      toast({ title: "Pickup added", description: `${pendingOrders.length} orders from ${selectedAH} added as pickups.` });
+      onDispatched();
+      setSelectedAH("");
+    } catch (err: any) {
+      toast({ title: "Failed", description: err.message, variant: "destructive" });
+    } finally {
+      setAddingAH(false);
+    }
+  };
+
   const handleOptimize = async () => {
     if (!selectedDriver) return;
     setOptimizing(true);
@@ -114,10 +143,7 @@ export default function DispatchPanel({ selectedOrderIds, orders, onDispatched }
       const { data: route } = await supabase
         .from("routes").select("id").eq("driver_id", selectedDriver).eq("route_date", routeDate).maybeSingle();
       if (!route) throw new Error("No route found for this driver and date");
-
-      const { data, error } = await supabase.functions.invoke("optimize-route", {
-        body: { route_id: route.id },
-      });
+      const { error } = await supabase.functions.invoke("optimize-route", { body: { route_id: route.id } });
       if (error) throw error;
       toast({ title: "Route Optimized", description: "Stop order has been updated." });
       onDispatched();
@@ -135,34 +161,53 @@ export default function DispatchPanel({ selectedOrderIds, orders, onDispatched }
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Dispatch {selectedOrderIds.length} Orders</CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-wrap gap-3">
-        <Select value={selectedDriver} onValueChange={setSelectedDriver}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Select driver" /></SelectTrigger>
-          <SelectContent>
-            {drivers.map((d) => (
-              <SelectItem key={d.id} value={d.id}>{d.display_name || d.id.slice(0, 8)}</SelectItem>
-            ))}
-            {drivers.length === 0 && <SelectItem value="none" disabled>No drivers found</SelectItem>}
-          </SelectContent>
-        </Select>
-        <Select value={selectedVehicle} onValueChange={setSelectedVehicle}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Select vehicle" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">No vehicle</SelectItem>
-            {vehicles.map((v) => (
-              <SelectItem key={v.id} value={v.id}>{v.year} {v.make} {v.model}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Input type="date" value={routeDate} onChange={(e) => setRouteDate(e.target.value)} className="w-[160px]" />
-        <Button onClick={handleDispatch} disabled={!selectedDriver || dispatching}>
-          <Send className="mr-2 h-4 w-4" />
-          {dispatching ? "Dispatching..." : "Dispatch"}
-        </Button>
-        <Button variant="outline" onClick={handleOptimize} disabled={!selectedDriver || optimizing}>
-          <Zap className="mr-2 h-4 w-4" />
-          {optimizing ? "Optimizing..." : "Optimize Stop Order"}
-        </Button>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-3">
+          <Select value={selectedDriver} onValueChange={setSelectedDriver}>
+            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Select driver" /></SelectTrigger>
+            <SelectContent>
+              {drivers.map((d) => <SelectItem key={d.id} value={d.id}>{d.display_name || d.id.slice(0, 8)}</SelectItem>)}
+              {drivers.length === 0 && <SelectItem value="none" disabled>No drivers found</SelectItem>}
+            </SelectContent>
+          </Select>
+          <Select value={selectedVehicle} onValueChange={setSelectedVehicle}>
+            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Select vehicle" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No vehicle</SelectItem>
+              {vehicles.map((v) => <SelectItem key={v.id} value={v.id}>{v.year} {v.make} {v.model}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Input type="date" value={routeDate} onChange={(e) => setRouteDate(e.target.value)} className="w-[160px]" />
+          <Input
+            placeholder="Route note (e.g. Hamilton West)"
+            value={routeNote}
+            onChange={(e) => setRouteNote(e.target.value)}
+            className="w-[220px]"
+          />
+          <Button onClick={handleDispatch} disabled={!selectedDriver || dispatching}>
+            <Send className="mr-2 h-4 w-4" />{dispatching ? "Dispatching..." : "Dispatch"}
+          </Button>
+          <Button variant="outline" onClick={handleOptimize} disabled={!selectedDriver || optimizing}>
+            <Zap className="mr-2 h-4 w-4" />{optimizing ? "Optimizing..." : "Optimize Stop Order"}
+          </Button>
+        </div>
+
+        {auctionHouses.length > 0 && (
+          <div className="flex flex-wrap gap-3 pt-2 border-t">
+            <p className="w-full text-xs text-muted-foreground flex items-center gap-1.5">
+              <Building2 className="h-3.5 w-3.5" /> Add all pending pickups from an auction house:
+            </p>
+            <Select value={selectedAH} onValueChange={setSelectedAH}>
+              <SelectTrigger className="w-[220px]"><SelectValue placeholder="Select auction house" /></SelectTrigger>
+              <SelectContent>
+                {auctionHouses.map((ah) => <SelectItem key={ah.id} value={ah.name}>{ah.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" onClick={handleAddAHPickup} disabled={!selectedDriver || !selectedAH || addingAH}>
+              <Plus className="mr-1.5 h-4 w-4" />{addingAH ? "Adding..." : "Add Pickups"}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

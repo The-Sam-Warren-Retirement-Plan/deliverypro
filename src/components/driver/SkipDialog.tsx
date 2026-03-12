@@ -59,15 +59,21 @@ export default function SkipDialog({ orderId, onClose, onSkipped }: Props) {
           <DialogTitle>Skip Stop</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          <Select value={reason} onValueChange={(v) => setReason(v as Enums<"archive_reason">)}>
-            <SelectTrigger><SelectValue placeholder="Select reason..." /></SelectTrigger>
-            <SelectContent>
-              {reasons.map((r) => (
-                <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Textarea placeholder="Additional notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          <div>
+            <label className="text-xs font-medium mb-1.5 block">Reason <span className="text-destructive">*</span></label>
+            <Select value={reason} onValueChange={(v) => setReason(v as Enums<"archive_reason">)}>
+              <SelectTrigger><SelectValue placeholder="Select a reason..." /></SelectTrigger>
+              <SelectContent>
+                {reasons.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1.5 block">Additional Notes</label>
+            <Textarea placeholder="Add any details about the skip..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>

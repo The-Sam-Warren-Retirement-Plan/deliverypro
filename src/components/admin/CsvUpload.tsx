@@ -293,7 +293,7 @@ export default function CsvUpload({ onImported }: Props) {
                       in_transit: "In Transit",
                       delivered: "Delivered",
                     };
-                    return count > 0 || true ? (
+                    return count > 0 ? (
                       <TableRow key={status}>
                         <TableCell className="text-sm">{labels[status]}</TableCell>
                         <TableCell className="text-right font-mono text-sm">{count}</TableCell>

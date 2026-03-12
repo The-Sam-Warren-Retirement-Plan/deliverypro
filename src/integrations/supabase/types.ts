@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      auction_houses: {
+        Row: {
+          id: string
+          name: string
+          address: string | null
+          phone: string | null
+          contact: string | null
+          delivery_zone: string | null
+          instructions: string | null
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          address?: string | null
+          phone?: string | null
+          contact?: string | null
+          delivery_zone?: string | null
+          instructions?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          address?: string | null
+          phone?: string | null
+          contact?: string | null
+          delivery_zone?: string | null
+          instructions?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       archived_stops: {
         Row: {
           archived_at: string
@@ -148,6 +184,7 @@ export type Database = {
           address: string | null
           address_line2: string | null
           auction_house: string | null
+          box_count: number | null
           created_at: string
           customer_name: string | null
           delivery_instructions: string | null
@@ -168,6 +205,7 @@ export type Database = {
           address?: string | null
           address_line2?: string | null
           auction_house?: string | null
+          box_count?: number | null
           created_at?: string
           customer_name?: string | null
           delivery_instructions?: string | null
@@ -188,6 +226,7 @@ export type Database = {
           address?: string | null
           address_line2?: string | null
           auction_house?: string | null
+          box_count?: number | null
           created_at?: string
           customer_name?: string | null
           delivery_instructions?: string | null
@@ -280,23 +319,29 @@ export type Database = {
       }
       routes: {
         Row: {
+          closed_at: string | null
           created_at: string
           driver_id: string | null
           id: string
+          note: string | null
           route_date: string
           vehicle_id: string | null
         }
         Insert: {
+          closed_at?: string | null
           created_at?: string
           driver_id?: string | null
           id?: string
+          note?: string | null
           route_date: string
           vehicle_id?: string | null
         }
         Update: {
+          closed_at?: string | null
           created_at?: string
           driver_id?: string | null
           id?: string
+          note?: string | null
           route_date?: string
           vehicle_id?: string | null
         }

@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, StickyNote, Trash2 } from "lucide-react";
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, StickyNote, Trash2, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
@@ -42,9 +43,9 @@ type SortDir = "asc" | "desc";
 
 export default function OrdersTable({ orders, selectedIds, onSelectionChange, onOrdersChanged }: Props) {
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilters, setStatusFilters] = useState<string[]>([]);
   const [paymentFilter, setPaymentFilter] = useState<string>("all");
-  const [zoneFilter, setZoneFilter] = useState<string>("all");
+  const [zoneFilters, setZoneFilters] = useState<string[]>([]);
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [notesOrder, setNotesOrder] = useState<Tables<"orders"> | null>(null);
@@ -72,13 +73,17 @@ export default function OrdersTable({ orders, selectedIds, onSelectionChange, on
     return sortDir === "asc" ? <ArrowUp className="ml-1 h-3 w-3 inline" /> : <ArrowDown className="ml-1 h-3 w-3 inline" />;
   };
 
+  const toggleMulti = (value: string, list: string[], setList: (v: string[]) => void) => {
+    setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
+  };
+
   const filtered = useMemo(() => {
     let result = orders.filter((o) => {
       const matchSearch = !search || [o.pkgplace_id, o.customer_name, o.address, o.auction_house]
         .filter(Boolean).join(" ").toLowerCase().includes(search.toLowerCase());
-      const matchStatus = statusFilter === "all" || o.delivery_status === statusFilter;
+      const matchStatus = statusFilters.length === 0 || statusFilters.includes(o.delivery_status);
       const matchPayment = paymentFilter === "all" || o.payment_status === paymentFilter;
-      const matchZone = zoneFilter === "all" || o.zone === zoneFilter;
+      const matchZone = zoneFilters.length === 0 || (o.zone != null && zoneFilters.includes(o.zone));
       return matchSearch && matchStatus && matchPayment && matchZone;
     });
 
@@ -91,7 +96,7 @@ export default function OrdersTable({ orders, selectedIds, onSelectionChange, on
     }
 
     return result;
-  }, [orders, search, statusFilter, paymentFilter, zoneFilter, sortField, sortDir]);
+  }, [orders, search, statusFilters, paymentFilter, zoneFilters, sortField, sortDir]);
 
   const allSelected = filtered.length > 0 && filtered.every((o) => selectedIds.includes(o.pkgplace_id));
 
@@ -154,18 +159,27 @@ export default function OrdersTable({ orders, selectedIds, onSelectionChange, on
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search orders..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="requested">Requested</SelectItem>
-            <SelectItem value="ready">Ready</SelectItem>
-            <SelectItem value="picked_up">Picked Up</SelectItem>
-            <SelectItem value="warehouse">Warehouse</SelectItem>
-            <SelectItem value="in_transit">In Transit</SelectItem>
-            <SelectItem value="delivered">Delivered</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Status multi-select */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-[160px] justify-between font-normal">
+              {statusFilters.length === 0 ? "All Statuses" : `Status (${statusFilters.length})`}
+              <ChevronDown className="ml-1 h-4 w-4 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[180px] p-2" align="start">
+            {(["requested","ready","picked_up","warehouse","in_transit","delivered"] as const).map((s) => (
+              <label key={s} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                <Checkbox checked={statusFilters.includes(s)} onCheckedChange={() => toggleMulti(s, statusFilters, setStatusFilters)} />
+                {statusLabels[s]}
+              </label>
+            ))}
+            {statusFilters.length > 0 && (
+              <Button variant="ghost" size="sm" className="w-full mt-1 text-xs" onClick={() => setStatusFilters([])}>Clear</Button>
+            )}
+          </PopoverContent>
+        </Popover>
+
         <Select value={paymentFilter} onValueChange={setPaymentFilter}>
           <SelectTrigger className="w-[140px]"><SelectValue placeholder="Payment" /></SelectTrigger>
           <SelectContent>
@@ -174,15 +188,28 @@ export default function OrdersTable({ orders, selectedIds, onSelectionChange, on
             <SelectItem value="unpaid">Unpaid</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={zoneFilter} onValueChange={setZoneFilter}>
-          <SelectTrigger className="w-[140px]"><SelectValue placeholder="Zone" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Zones</SelectItem>
+
+        {/* Zone multi-select */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-[140px] justify-between font-normal">
+              {zoneFilters.length === 0 ? "All Zones" : `Zone (${zoneFilters.length})`}
+              <ChevronDown className="ml-1 h-4 w-4 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[160px] p-2" align="start">
+            {zones.length === 0 && <p className="text-xs text-muted-foreground px-2 py-1">No zones</p>}
             {zones.map((z) => (
-              <SelectItem key={z} value={z}>{z}</SelectItem>
+              <label key={z} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                <Checkbox checked={zoneFilters.includes(z)} onCheckedChange={() => toggleMulti(z, zoneFilters, setZoneFilters)} />
+                {z}
+              </label>
             ))}
-          </SelectContent>
-        </Select>
+            {zoneFilters.length > 0 && (
+              <Button variant="ghost" size="sm" className="w-full mt-1 text-xs" onClick={() => setZoneFilters([])}>Clear</Button>
+            )}
+          </PopoverContent>
+        </Popover>
         {selectedIds.length > 0 && (
           <Button variant="destructive" size="sm" onClick={handleBulkDelete} disabled={deleting}>
             <Trash2 className="mr-1.5 h-3.5 w-3.5" /> {deleting ? "Deleting..." : `Delete ${selectedIds.length}`}
@@ -225,7 +252,7 @@ export default function OrdersTable({ orders, selectedIds, onSelectionChange, on
                 <TableRow
                   key={order.pkgplace_id}
                   data-state={selectedIds.includes(order.pkgplace_id) ? "selected" : undefined}
-                  className={order.payment_status === "paid" ? "bg-success/5" : ""}
+
                 >
                   <TableCell>
                     <Checkbox checked={selectedIds.includes(order.pkgplace_id)} onCheckedChange={() => toggleOne(order.pkgplace_id)} />
@@ -240,7 +267,10 @@ export default function OrdersTable({ orders, selectedIds, onSelectionChange, on
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={order.payment_status === "unpaid" ? "destructive" : "secondary"}>
+                    <Badge
+                      variant={order.payment_status === "unpaid" ? "destructive" : "secondary"}
+                      className={order.payment_status === "paid" ? "bg-green-100 text-green-800 border border-green-300" : ""}
+                    >
                       {order.payment_status}
                     </Badge>
                   </TableCell>

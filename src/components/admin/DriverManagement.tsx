@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Eye, ChevronDown, ChevronUp } from "lucide-react";
+import { Users, Eye, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 
 interface DriverProfile {
@@ -33,6 +33,7 @@ export default function DriverManagement() {
   const [drivers, setDrivers] = useState<DriverProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [editDriver, setEditDriver] = useState<DriverProfile | null>(null);
+  const [deleteDriverId, setDeleteDriverId] = useState<string | null>(null);
   const [historyDriver, setHistoryDriver] = useState<string | null>(null);
   const [routeHistory, setRouteHistory] = useState<RouteHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -67,6 +68,14 @@ export default function DriverManagement() {
       setEditDriver(null);
       fetchDrivers();
     }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteDriverId) return;
+    await supabase.from("user_roles").delete().eq("user_id", deleteDriverId).eq("role", "driver");
+    toast({ title: "Driver removed", description: "Driver role has been removed." });
+    setDeleteDriverId(null);
+    fetchDrivers();
   };
 
   const fetchHistory = async (driverId: string) => {
@@ -157,6 +166,9 @@ export default function DriverManagement() {
                         <Button size="sm" variant="outline" onClick={() => fetchHistory(d.id)}>
                           <Eye className="mr-1 h-3 w-3" /> History
                         </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setDeleteDriverId(d.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -196,6 +208,18 @@ export default function DriverManagement() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDriver(null)}>Cancel</Button>
             <Button onClick={handleSave}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteDriverId} onOpenChange={() => setDeleteDriverId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Remove Driver</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">This will remove their driver access. Their account will still exist in Supabase Auth — delete it there if you want to fully remove them.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDriverId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Remove</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
